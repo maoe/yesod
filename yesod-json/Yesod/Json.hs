@@ -5,6 +5,7 @@ module Yesod.Json
     ( -- * Convert from a JSON value
       defaultLayoutJson
     , jsonToRepJson
+    , sourceToRepJson
 
       -- * Convert to a JSON value
     , parseJsonBody
@@ -23,11 +24,12 @@ module Yesod.Json
 import Yesod.Handler (GHandler, waiRequest, lift, invalidArgs, redirect)
 import Yesod.Content
     ( ToContent (toContent), RepHtmlJson (RepHtmlJson), RepHtml (RepHtml)
-    , RepJson (RepJson), Content (ContentBuilder)
+    , RepJson (RepJson), Content (ContentBuilder, ContentSource)
     )
 import Yesod.Core (defaultLayout, Yesod)
 import Yesod.Widget (GWidget)
 import Yesod.Routes.Class
+import Blaze.ByteString.Builder.ByteString (fromLazyByteString)
 import Control.Arrow (second)
 import Control.Applicative ((<$>))
 import Control.Monad (join)
@@ -35,6 +37,9 @@ import qualified Data.Aeson as J
 import Data.Aeson ((.=))
 import qualified Data.Aeson.Encode as JE
 import Data.Aeson.Encode (fromValue)
+import Data.Conduit (($=))
+import qualified Data.Conduit as C
+import qualified Data.Conduit.List as CL
 import Data.Conduit.Attoparsec (sinkParser)
 import Data.Text (Text, pack)
 import qualified Data.Vector as V
@@ -74,6 +79,11 @@ defaultLayoutJson w json = do
 -- /Since: 0.3.0/
 jsonToRepJson :: J.ToJSON a => a -> GHandler sub master RepJson
 jsonToRepJson = return . RepJson . toContent . J.toJSON
+
+sourceToRepJson :: J.ToJSON a => C.Source IO a -> GHandler sub master RepJson
+sourceToRepJson source = return $ RepJson $ ContentSource $ source'
+    where
+        source' = source $= CL.map (C.Chunk . fromLazyByteString . J.encode)
 
 -- | Parse the request body to a data type as a JSON value.  The
 -- data type must support conversion from JSON via 'J.FromJSON'.
